@@ -81,21 +81,26 @@ class MainActivity : ComponentActivity() {
                 super.onPageFinished(view, url)
                 progressBar.visibility = View.GONE
 
+                val isLoginPage = url?.contains("login", ignoreCase = true) == true ||
+                        url?.contains("account", ignoreCase = true) == true
+
+                val desiredWidthValue = if (isLoginPage) 480 else 1024
+
                 val js = """
-    (function() {
-        var meta = document.querySelector('meta[name="viewport"]');
-        if (!meta) {
-            meta = document.createElement('meta');
-            meta.name = 'viewport';
-            document.getElementsByTagName('head')[0].appendChild(meta);
-        }
-        var desiredWidth = 800;
-        var scale = window.screen.width / desiredWidth;
-        meta.setAttribute('content', 'width=' + desiredWidth + ', initial-scale=' + scale + ', user-scalable=yes');
-        window.scrollTo(0, 0);
-        window.print = function() { AndroidPrint.triggerPrint(); };
-    })();
-""".trimIndent()
+        (function() {
+            var meta = document.querySelector('meta[name="viewport"]');
+            if (!meta) {
+                meta = document.createElement('meta');
+                meta.name = 'viewport';
+                document.getElementsByTagName('head')[0].appendChild(meta);
+            }
+            var desiredWidth = $desiredWidthValue;
+            var scale = window.screen.width / desiredWidth;
+            meta.setAttribute('content', 'width=' + desiredWidth + ', initial-scale=' + scale + ', user-scalable=yes');
+            window.scrollTo(0, 0);
+            window.print = function() { AndroidPrint.triggerPrint(); };
+        })();
+    """.trimIndent()
                 view?.evaluateJavascript(js, null)
                 view?.scrollTo(0, 0)
             }
