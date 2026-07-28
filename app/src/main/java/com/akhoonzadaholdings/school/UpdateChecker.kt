@@ -90,9 +90,31 @@ object UpdateChecker {
 
         Thread {
             try {
-                val url = URL(apkUrl)
-                val connection = url.openConnection() as HttpURLConnection
-                connection.connect()
+                var currentUrl = apkUrl
+                var connection: HttpURLConnection
+                var redirectCount = 0
+
+                // Follow redirects manually (GitHub release links redirect to a different host)
+                while (true) {
+                    connection = URL(currentUrl).openConnection() as HttpURLConnection
+                    connection.instanceFollowRedirects = false
+                    connection.connectTimeout = 10000
+                    connection.readTimeout = 10000
+                    connection.connect()
+
+                    val code = connection.responseCode
+                    if (code in 300..399) {
+                        val newUrl = connection.getHeaderField("Location")
+                        connection.disconnect()
+                        if (newUrl.isNullOrEmpty() || redirectCount > 5) {
+                            throw Exception("Too many redirects or missing Location header")
+                        }
+                        currentUrl = newUrl
+                        redirectCount++
+                    } else {
+                        break
+                    }
+                }
 
                 val fileLength = connection.contentLength
                 val outputFile = File(context.getExternalFilesDir(null), "update.apk")
@@ -125,6 +147,7 @@ object UpdateChecker {
                 e.printStackTrace()
                 Handler(Looper.getMainLooper()).post {
                     progressDialog.dismiss()
+                    android.widget.Toast.makeText(context, "Update download failed: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
                     onFinished(true)
                 }
             }
