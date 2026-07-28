@@ -38,6 +38,31 @@ class MainActivity : ComponentActivity() {
         settings.displayZoomControls = false
         settings.userAgentString = desktopUserAgent
 
+        // Handle file downloads (Save PDF, etc.)
+        webView.setDownloadListener { url, userAgent, contentDisposition, mimetype, _ ->
+            val request = android.app.DownloadManager.Request(android.net.Uri.parse(url))
+            request.setMimeType(mimetype)
+            request.addRequestHeader("User-Agent", userAgent)
+            request.setDescription("Downloading file...")
+            request.setTitle(android.webkit.URLUtil.guessFileName(url, contentDisposition, mimetype))
+            request.setNotificationVisibility(android.app.DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+            request.setDestinationInExternalPublicDir(
+                android.os.Environment.DIRECTORY_DOWNLOADS,
+                android.webkit.URLUtil.guessFileName(url, contentDisposition, mimetype)
+            )
+            val dm = getSystemService(DOWNLOAD_SERVICE) as android.app.DownloadManager
+            dm.enqueue(request)
+            android.widget.Toast.makeText(this, "Downloading...", android.widget.Toast.LENGTH_SHORT).show()
+        }
+
+        // Allow the website's print button to trigger Android's native print dialog
+        webView.addJavascriptInterface(object {
+            @android.webkit.JavascriptInterface
+            fun triggerPrint() {
+                runOnUiThread { printCurrentPage() }
+            }
+        }, "AndroidPrint")
+
         webView.webChromeClient = object : WebChromeClient() {
             override fun onProgressChanged(view: WebView?, newProgress: Int) {
                 super.onProgressChanged(view, newProgress)
@@ -57,25 +82,33 @@ class MainActivity : ComponentActivity() {
                 progressBar.visibility = View.GONE
 
                 val js = """
-                    (function() {
-                        var meta = document.querySelector('meta[name="viewport"]');
-                        if (!meta) {
-                            meta = document.createElement('meta');
-                            meta.name = 'viewport';
-                            document.getElementsByTagName('head')[0].appendChild(meta);
-                        }
-                        var desiredWidth = 1024;
-                        var scale = window.screen.width / desiredWidth;
-                        meta.setAttribute('content', 'width=' + desiredWidth + ', initial-scale=' + scale + ', user-scalable=yes');
-                        window.scrollTo(0, 0);
-                    })();
-                """.trimIndent()
+    (function() {
+        var meta = document.querySelector('meta[name="viewport"]');
+        if (!meta) {
+            meta = document.createElement('meta');
+            meta.name = 'viewport';
+            document.getElementsByTagName('head')[0].appendChild(meta);
+        }
+        var desiredWidth = 800;
+        var scale = window.screen.width / desiredWidth;
+        meta.setAttribute('content', 'width=' + desiredWidth + ', initial-scale=' + scale + ', user-scalable=yes');
+        window.scrollTo(0, 0);
+        window.print = function() { AndroidPrint.triggerPrint(); };
+    })();
+""".trimIndent()
                 view?.evaluateJavascript(js, null)
                 view?.scrollTo(0, 0)
             }
         }
 
         webView.loadUrl("https://school.akhoonzadaholdings.com/public/index.php?route=portal%2Findex")
+    }
+
+    private fun printCurrentPage() {
+        val printManager = getSystemService(android.content.Context.PRINT_SERVICE) as android.print.PrintManager
+        val jobName = "AKPSC Document"
+        val printAdapter = webView.createPrintDocumentAdapter(jobName)
+        printManager.print(jobName, printAdapter, android.print.PrintAttributes.Builder().build())
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
