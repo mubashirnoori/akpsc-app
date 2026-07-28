@@ -5,7 +5,6 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.animation.AnimationUtils
-import android.widget.ImageView
 import androidx.activity.ComponentActivity
 
 class SplashActivity : ComponentActivity() {
@@ -14,16 +13,27 @@ class SplashActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_splash)
 
-        val logo = findViewById<ImageView>(R.id.splashLogo)
+        val logo = findViewById<android.widget.ImageView>(R.id.splashLogo)
         val anim = AnimationUtils.loadAnimation(this, R.anim.splash_scale_fade)
         logo.startAnimation(anim)
 
-        UpdateChecker.check(this)
+        // Minimum splash time so the logo animation is visible even if check is instant
+        val minSplashTime = 1200L
+        val startTime = System.currentTimeMillis()
 
-        Handler(Looper.getMainLooper()).postDelayed({
-            startActivity(Intent(this, MainActivity::class.java))
-            overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
-            finish()
-        }, 1600)
+        UpdateChecker.check(this) {
+            val elapsed = System.currentTimeMillis() - startTime
+            val remaining = (minSplashTime - elapsed).coerceAtLeast(0)
+
+            Handler(Looper.getMainLooper()).postDelayed({
+                goToMain()
+            }, remaining)
+        }
+    }
+
+    private fun goToMain() {
+        startActivity(Intent(this, MainActivity::class.java))
+        overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
+        finish()
     }
 }
