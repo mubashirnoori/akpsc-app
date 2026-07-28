@@ -94,41 +94,52 @@ object UpdateChecker {
                 var connection: HttpURLConnection
                 var redirectCount = 0
 
-                // Follow redirects manually (GitHub release links redirect to a different host)
                 while (true) {
-                    connection = URL(currentUrl).openConnection() as HttpURLConnection
+                    val url = URL(currentUrl)
+                    connection = url.openConnection() as HttpURLConnection
                     connection.instanceFollowRedirects = false
-                    connection.connectTimeout = 10000
-                    connection.readTimeout = 10000
+                    connection.connectTimeout = 15000
+                    connection.readTimeout = 15000
+                    connection.setRequestProperty("User-Agent", "Mozilla/5.0")
                     connection.connect()
 
                     val code = connection.responseCode
+                    android.util.Log.d("UpdateChecker", "Response code: $code for URL: $currentUrl")
+
                     if (code in 300..399) {
                         val newUrl = connection.getHeaderField("Location")
                         connection.disconnect()
                         if (newUrl.isNullOrEmpty() || redirectCount > 5) {
-                            throw Exception("Too many redirects or missing Location header")
+                            throw Exception("Redirect failed at hop $redirectCount")
                         }
                         currentUrl = newUrl
                         redirectCount++
-                    } else {
+                    } else if (code == 200) {
                         break
+                    } else {
+                        throw Exception("Server returned HTTP $code")
                     }
                 }
 
-                val fileLength = connection.contentLength
-                val outputFile = File(context.getExternalFilesDir(null), "update.apk")
+                val contentType = connection.contentType
+                android.util.Log.d("UpdateChecker", "Content-Type: $contentType")
 
+                val fileLength = connection.contentLength
+                android.util.Log.d("UpdateChecker", "Expected file size: $fileLength bytes")
+
+                val outputFile = File(context.getExternalFilesDir(null), "update.apk")
+                if (outputFile.exists()) outputFile.delete()
+
+                var totalDownloaded = 0L
                 connection.inputStream.use { input ->
                     FileOutputStream(outputFile).use { output ->
-                        val buffer = ByteArray(4096)
-                        var total = 0L
+                        val buffer = ByteArray(8192)
                         var count: Int
                         while (input.read(buffer).also { count = it } != -1) {
-                            total += count
+                            totalDownloaded += count
                             output.write(buffer, 0, count)
                             if (fileLength > 0) {
-                                val progress = (total * 100 / fileLength).toInt()
+                                val progress = (totalDownloaded * 100 / fileLength).toInt()
                                 Handler(Looper.getMainLooper()).post {
                                     progressBar.progress = progress
                                     progressText.text = "Downloading update... $progress%"
@@ -138,6 +149,12 @@ object UpdateChecker {
                     }
                 }
 
+                android.util.Log.d("UpdateChecker", "Actually downloaded: $totalDownloaded bytes, file size on disk: ${outputFile.length()}")
+
+                if (outputFile.length() < 100_000) {
+                    throw Exception("Downloaded file too small (${outputFile.length()} bytes) — likely not a real APK")
+                }
+
                 Handler(Looper.getMainLooper()).post {
                     progressDialog.dismiss()
                     installApk(context, outputFile)
@@ -145,9 +162,10 @@ object UpdateChecker {
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
+                android.util.Log.e("UpdateChecker", "Download failed: ${e.message}")
                 Handler(Looper.getMainLooper()).post {
                     progressDialog.dismiss()
-                    android.widget.Toast.makeText(context, "Update download failed: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                    android.widget.Toast.makeText(context, "Update failed: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
                     onFinished(true)
                 }
             }
