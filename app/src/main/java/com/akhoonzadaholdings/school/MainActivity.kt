@@ -91,7 +91,7 @@ class MainActivity : ComponentActivity() {
                 val isLoginPage = url?.contains("login", ignoreCase = true) == true ||
                         url?.contains("account", ignoreCase = true) == true
 
-                val desiredWidthValue = if (isLoginPage) 420 else 800
+                val desiredWidthValue = if (isLoginPage) 420 else 1100
 
                 val js = """
         (function() {
@@ -106,6 +106,10 @@ class MainActivity : ComponentActivity() {
             meta.setAttribute('content', 'width=' + desiredWidth + ', initial-scale=' + scale + ', user-scalable=yes');
             window.scrollTo(0, 0);
             window.print = function() { AndroidPrint.triggerPrint(); };
+
+            var style = document.createElement('style');
+            style.innerHTML = 'html, body { overflow: auto !important; height: auto !important; max-height: none !important; }';
+            document.head.appendChild(style);
         })();
     """.trimIndent()
                 view?.evaluateJavascript(js, null)
