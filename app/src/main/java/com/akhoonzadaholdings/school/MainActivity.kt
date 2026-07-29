@@ -38,12 +38,25 @@ class MainActivity : ComponentActivity() {
         val settings: WebSettings = webView.settings
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
+
+        // Let the site's own responsive CSS/viewport tag do the work — do NOT
+        // also inject a JS viewport override. Fighting the site's own
+        // <meta name="viewport"> from Java/JS is what caused the oversized,
+        // cut-off layout and the "zoom feels frozen" touch bug.
         settings.loadWithOverviewMode = true
         settings.useWideViewPort = true
         settings.setSupportZoom(true)
         settings.builtInZoomControls = true
         settings.displayZoomControls = false
         settings.userAgentString = desktopUserAgent
+
+        // Security: don't let the WebView read arbitrary local files or mix
+        // http/https content. Neither is needed for this site, and leaving
+        // them on widens the attack surface if the page is ever compromised
+        // (e.g. via injected/malicious JS reaching local file:// URIs).
+        settings.allowFileAccess = false
+        settings.allowContentAccess = false
+        settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
 
         // Handle file downloads (Save PDF, etc.)
         webView.setDownloadListener { url, userAgent, contentDisposition, mimetype, _ ->
@@ -62,7 +75,10 @@ class MainActivity : ComponentActivity() {
             android.widget.Toast.makeText(this, "Downloading...", android.widget.Toast.LENGTH_SHORT).show()
         }
 
-        // Allow the website's print button to trigger Android's native print dialog
+        // Allow the website's print button to trigger Android's native print dialog.
+        // This interface only exposes a zero-argument method, so the blast radius
+        // of any injected script calling it is minimal — but keep it that way;
+        // never widen this interface to accept parameters from page JS.
         webView.addJavascriptInterface(object {
             @android.webkit.JavascriptInterface
             fun triggerPrint() {
@@ -89,8 +105,8 @@ class MainActivity : ComponentActivity() {
                 progressBar.visibility = View.GONE
 
                 // Only inject the print bridge — no viewport/width/scale forcing,
-                // no overflow overrides. Let the page and WebView's native
-                // zoom/pan behave exactly as they normally would.
+                // no overflow overrides. Let the page render exactly as it does
+                // in a real mobile browser (see Chrome mobile screenshot).
                 val js = """
                     (function() {
                         window.print = function() { AndroidPrint.triggerPrint(); };
