@@ -111,7 +111,7 @@ class MainActivity : ComponentActivity() {
                         url?.contains("account", ignoreCase = true) == true
 
                 // Reduced values so pages appear closer to actual size, less empty space visible
-                val desiredWidthValue = if (isLoginPage) 420 else 800
+                val desiredWidthValue = if (isLoginPage) 420 else 1024
 
                 val js = """
         (function() {
