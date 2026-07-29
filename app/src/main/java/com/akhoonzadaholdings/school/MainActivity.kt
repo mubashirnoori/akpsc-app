@@ -95,28 +95,39 @@ class MainActivity : ComponentActivity() {
                 super.onPageStarted(view, url, favicon)
                 progressBar.visibility = View.VISIBLE
 
-                // Force the desktop viewport BEFORE layout happens (onPageStarted,
-                // not onPageFinished). Injecting this early — while the DOM is
-                // still being built — avoids the scale/touch-coordinate desync
-                // we hit before, since WebView never computes a "mobile" layout
-                // pass that this would then have to override after the fact.
-                val js = """
-                    (function() {
-                        var meta = document.querySelector('meta[name="viewport"]');
-                        if (!meta) {
-                            meta = document.createElement('meta');
-                            meta.name = 'viewport';
-                            (document.head || document.documentElement).appendChild(meta);
-                        }
-                        // user-scalable=yes keeps native pinch-zoom working —
-                        // we're only overriding the initial layout width, not
-                        // taking over touch handling ourselves.
-                        meta.setAttribute(
-                            'content',
-                            'width=$desktopViewportWidth, initial-scale=1.0, user-scalable=yes'
-                        );
-                    })();
-                """.trimIndent()
+                // Login/account pages are a centered card sized for a narrow screen —
+                // they aren't part of the nav-rail dashboard layout, so forcing the
+                // desktop width on them pushes their vertically-centered content below
+                // the fold. Only force desktop width on the actual dashboard/portal pages.
+                val isAuthPage = url?.contains("route=auth", ignoreCase = true) == true
+
+                val js = if (isAuthPage) {
+                    // Let the login page use its own natural mobile viewport — don't
+                    // touch it at all.
+                    """
+        (function() {
+            var meta = document.querySelector('meta[name="viewport"]');
+            if (meta) {
+                meta.setAttribute('content', 'width=device-width, initial-scale=1.0, user-scalable=yes');
+            }
+        })();
+        """.trimIndent()
+                } else {
+                    """
+        (function() {
+            var meta = document.querySelector('meta[name="viewport"]');
+            if (!meta) {
+                meta = document.createElement('meta');
+                meta.name = 'viewport';
+                (document.head || document.documentElement).appendChild(meta);
+            }
+            meta.setAttribute(
+                'content',
+                'width=$desktopViewportWidth, initial-scale=1.0, user-scalable=yes'
+            );
+        })();
+        """.trimIndent()
+                }
                 view?.evaluateJavascript(js, null)
             }
 
