@@ -1,6 +1,6 @@
 {
-  "versionCode": 9,
-  "versionName": "1.8",
-  "apkUrl": "https://github.com/mubashirnoori/akpsc-app/releases/download/v1.8/app-release.apk",
-  "notes": "Width set to 1024"
+  "versionCode": 10,
+  "versionName": "1.9",
+  "apkUrl": "https://github.com/mubashirnoori/akpsc-app/releases/download/v1.9/app-release.apk",
+  "notes": "Height fixed"
 }
