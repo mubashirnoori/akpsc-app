@@ -21,6 +21,13 @@ object UpdateChecker {
     private const val VERSION_URL =
         "https://raw.githubusercontent.com/mubashirnoori/akpsc-app/main/version.json"
 
+    // How long a failure Toast/message must stay visible before we let the
+    // splash screen continue into MainActivity. Without this, a fast-failing
+    // download (e.g. a bad URL, 404, redirect problem) can throw within a
+    // fraction of a second, and the app jumps into MainActivity before the
+    // Toast is even readable.
+    private const val FAILURE_DISPLAY_TIME_MS = 2500L
+
     fun check(context: Context, onFinished: (updateAvailable: Boolean) -> Unit) {
         Thread {
             try {
@@ -34,6 +41,8 @@ object UpdateChecker {
                 val latestVersionName = json.getString("versionName")
                 val apkUrl = json.getString("apkUrl")
                 val notes = json.optString("notes", "")
+
+                android.util.Log.d("UpdateChecker", "version.json => versionCode=$latestVersionCode versionName=$latestVersionName apkUrl=$apkUrl")
 
                 val currentVersionCode = context.packageManager
                     .getPackageInfo(context.packageName, 0).let {
@@ -49,7 +58,7 @@ object UpdateChecker {
                     }
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                android.util.Log.e("UpdateChecker", "Version check failed: ${e.message}", e)
                 Handler(Looper.getMainLooper()).post { onFinished(false) }
             }
         }.start()
@@ -110,14 +119,17 @@ object UpdateChecker {
                         val newUrl = connection.getHeaderField("Location")
                         connection.disconnect()
                         if (newUrl.isNullOrEmpty() || redirectCount > 5) {
-                            throw Exception("Redirect failed at hop $redirectCount")
+                            throw Exception("Redirect failed at hop $redirectCount (last URL: $currentUrl)")
                         }
                         currentUrl = newUrl
                         redirectCount++
                     } else if (code == 200) {
                         break
                     } else {
-                        throw Exception("Server returned HTTP $code")
+                        val errorBody = try {
+                            connection.errorStream?.bufferedReader()?.use { it.readText() }?.take(300)
+                        } catch (_: Exception) { null }
+                        throw Exception("Server returned HTTP $code for $currentUrl${if (errorBody != null) " — $errorBody" else ""}")
                     }
                 }
 
@@ -149,10 +161,13 @@ object UpdateChecker {
                     }
                 }
 
-                android.util.Log.d("UpdateChecker", "Actually downloaded: $totalDownloaded bytes, file size on disk: ${outputFile.length()}")
+                android.util.Log.d("UpdateChecker", "Actually downloaded: $totalDownloaded bytes, file size on disk: ${outputFile.length()}, Content-Type was: $contentType")
 
                 if (outputFile.length() < 100_000) {
-                    throw Exception("Downloaded file too small (${outputFile.length()} bytes) — likely not a real APK")
+                    val preview = try {
+                        outputFile.readText().take(300)
+                    } catch (_: Exception) { "(binary, can't preview)" }
+                    throw Exception("Downloaded file too small (${outputFile.length()} bytes) — likely not a real APK. Preview: $preview")
                 }
 
                 Handler(Looper.getMainLooper()).post {
@@ -161,13 +176,22 @@ object UpdateChecker {
                     onFinished(true)
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
-                android.util.Log.e("UpdateChecker", "Download failed: ${e.message}")
+                android.util.Log.e("UpdateChecker", "Download failed: ${e.message}", e)
                 Handler(Looper.getMainLooper()).post {
                     progressDialog.dismiss()
-                    android.widget.Toast.makeText(context, "Update failed: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
-                    onFinished(true)
+                    android.widget.Toast.makeText(
+                        context,
+                        "Update failed: ${e.message}",
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
                 }
+                // Give the failure Toast real time on screen before letting the
+                // splash screen move on — this is the fix for "bar shows for a
+                // second, then the old app just opens": onFinished() used to
+                // fire immediately here, racing past the Toast.
+                Handler(Looper.getMainLooper()).postDelayed({
+                    onFinished(true)
+                }, FAILURE_DISPLAY_TIME_MS)
             }
         }.start()
     }
