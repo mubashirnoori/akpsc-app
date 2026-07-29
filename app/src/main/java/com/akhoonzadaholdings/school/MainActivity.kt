@@ -25,7 +25,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-// Push content below the status bar (WiFi/notification area)
+        // Push content below the status bar (WiFi/notification area)
         androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.mainLayout)) { view, insets ->
             val systemBars = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars())
             view.setPadding(0, systemBars.top, 0, 0)
@@ -70,6 +70,25 @@ class MainActivity : ComponentActivity() {
             }
         }, "AndroidPrint")
 
+        // Lets the page report its real content height, in CSS px, so we can resize
+        // the WebView's native height to match instead of leaving a big blank gap
+        // (or, on the flip side, clipping content) below/beyond the actual page.
+        webView.addJavascriptInterface(object {
+            @android.webkit.JavascriptInterface
+            fun reportHeight(cssPx: Float) {
+                runOnUiThread {
+                    if (cssPx <= 0f) return@runOnUiThread
+                    val density = resources.displayMetrics.density
+                    val px = (cssPx * density).toInt().coerceAtLeast(1)
+                    val params = webView.layoutParams
+                    if (params.height != px) {
+                        params.height = px
+                        webView.layoutParams = params
+                    }
+                }
+            }
+        }, "AndroidLayout")
+
         webView.webChromeClient = object : WebChromeClient() {
             override fun onProgressChanged(view: WebView?, newProgress: Int) {
                 super.onProgressChanged(view, newProgress)
@@ -91,7 +110,8 @@ class MainActivity : ComponentActivity() {
                 val isLoginPage = url?.contains("login", ignoreCase = true) == true ||
                         url?.contains("account", ignoreCase = true) == true
 
-                val desiredWidthValue = if (isLoginPage) 480 else 1024
+                // Reduced values so pages appear closer to actual size, less empty space visible
+                val desiredWidthValue = if (isLoginPage) 420 else 800
 
                 val js = """
         (function() {
@@ -106,6 +126,38 @@ class MainActivity : ComponentActivity() {
             meta.setAttribute('content', 'width=' + desiredWidth + ', initial-scale=' + scale + ', user-scalable=yes');
             window.scrollTo(0, 0);
             window.print = function() { AndroidPrint.triggerPrint(); };
+
+            // --- Auto-height reporting -------------------------------------
+            // Tell the native app how tall the page's real content is (in CSS
+            // px, pre-scale) so it can size the WebView to match instead of
+            // always filling the whole screen with blank space below.
+            function reportHeight() {
+                if (!window.AndroidLayout) return;
+                var h = document.documentElement.scrollHeight;
+                AndroidLayout.reportHeight(h);
+            }
+
+            reportHeight();
+            window.addEventListener('load', reportHeight);
+            window.addEventListener('resize', reportHeight);
+
+            // Re-measure a few times after load: fonts, images, and the
+            // sidebar's own JS can all change the page height shortly after
+            // the 'load' event fires.
+            [150, 400, 900, 1800].forEach(function (delay) {
+                setTimeout(reportHeight, delay);
+            });
+
+            // Keep watching for content changes (e.g. sidebar flyouts opening,
+            // dynamic tables loading) without spamming the bridge on every tick.
+            if (window.MutationObserver) {
+                var debounce = null;
+                var observer = new MutationObserver(function () {
+                    if (debounce) { clearTimeout(debounce); }
+                    debounce = setTimeout(reportHeight, 200);
+                });
+                observer.observe(document.body, { childList: true, subtree: true, attributes: true });
+            }
         })();
     """.trimIndent()
                 view?.evaluateJavascript(js, null)
