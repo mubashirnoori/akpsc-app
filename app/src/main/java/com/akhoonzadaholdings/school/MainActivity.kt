@@ -88,32 +88,15 @@ class MainActivity : ComponentActivity() {
                 super.onPageFinished(view, url)
                 progressBar.visibility = View.GONE
 
-                val isLoginPage = url?.contains("login", ignoreCase = true) == true ||
-                        url?.contains("account", ignoreCase = true) == true
-
-                val desiredWidthValue = if (isLoginPage) 420 else 1100
-
+                // Only inject the print bridge — no viewport/width/scale forcing,
+                // no overflow overrides. Let the page and WebView's native
+                // zoom/pan behave exactly as they normally would.
                 val js = """
-        (function() {
-            var meta = document.querySelector('meta[name="viewport"]');
-            if (!meta) {
-                meta = document.createElement('meta');
-                meta.name = 'viewport';
-                document.getElementsByTagName('head')[0].appendChild(meta);
-            }
-            var desiredWidth = $desiredWidthValue;
-            var scale = window.screen.width / desiredWidth;
-            meta.setAttribute('content', 'width=' + desiredWidth + ', initial-scale=' + scale + ', user-scalable=yes');
-            window.scrollTo(0, 0);
-            window.print = function() { AndroidPrint.triggerPrint(); };
-
-            var style = document.createElement('style');
-            style.innerHTML = 'html, body { overflow: auto !important; height: auto !important; max-height: none !important; }';
-            document.head.appendChild(style);
-        })();
-    """.trimIndent()
+                    (function() {
+                        window.print = function() { AndroidPrint.triggerPrint(); };
+                    })();
+                """.trimIndent()
                 view?.evaluateJavascript(js, null)
-                view?.scrollTo(0, 0)
             }
         }
 
