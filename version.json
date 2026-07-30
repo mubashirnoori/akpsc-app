@@ -1,6 +1,6 @@
 {
-  "versionCode": 17,
-  "versionName": "1.0.7",
-  "apkUrl": "https://github.com/mubashirnoori/akpsc-app/releases/download/v1.0.7/app-release.apk",
-  "notes": "Login Page Fixed View"
+  "versionCode": 18,
+  "versionName": "1.0.8",
+  "apkUrl": "https://github.com/mubashirnoori/akpsc-app/releases/download/v1.0.8/app-release.apk",
+  "notes": "File Upload Fix"
 }
