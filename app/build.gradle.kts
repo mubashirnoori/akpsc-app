@@ -14,8 +14,8 @@ android {
         applicationId = "com.akhoonzadaholdings.school"
         minSdk = 24
         targetSdk = 36
-        versionCode = 19
-        versionName = "1.0.9"
+        versionCode = 20
+        versionName = "1.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

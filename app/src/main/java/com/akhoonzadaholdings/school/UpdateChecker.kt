@@ -173,7 +173,21 @@ object UpdateChecker {
                 Handler(Looper.getMainLooper()).post {
                     progressDialog.dismiss()
                     installApk(context, outputFile)
-                    onFinished(true)
+                    // Do NOT call onFinished() here. installApk() only *launches*
+                    // the system install prompt — it doesn't wait for the user to
+                    // tap "Install". Calling onFinished(true) right after used to
+                    // immediately continue the splash flow into MainActivity while
+                    // that prompt was still coming up, and MainActivity won the
+                    // race for the foreground — so the install screen never got a
+                    // chance to be seen or acted on. Nothing actually installed,
+                    // the version never changed, and the same "update available"
+                    // dialog reappeared on every launch. Finishing here instead
+                    // leaves the system installer as the only thing in front; if
+                    // the user completes the install, Android restarts the app
+                    // fresh (back at the splash screen) on its own.
+                    if (context is android.app.Activity) {
+                        context.finish()
+                    }
                 }
             } catch (e: Exception) {
                 android.util.Log.e("UpdateChecker", "Download failed: ${e.message}", e)
