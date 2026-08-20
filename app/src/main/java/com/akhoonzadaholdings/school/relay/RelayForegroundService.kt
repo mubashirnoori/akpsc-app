@@ -90,6 +90,19 @@ class RelayForegroundService : Service() {
         super.onDestroy()
     }
 
+    // Swiping the app away from recents sends this even though the service itself is a
+    // separate component from any activity — without it, MIUI/most OEM launchers treat a
+    // swipe as "user wants this app gone" and kill the whole process, service included,
+    // no matter that it's a foreground service. START_STICKY only covers the OS reclaiming
+    // memory; it does not cover this case. Re-launching here is what makes the relay survive
+    // a swipe instead of quietly going dark until the next reboot.
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        if (RelayPrefs.isConfigured(this) && RelayPrefs.isEnabled(this)) {
+            start(applicationContext)
+        }
+        super.onTaskRemoved(rootIntent)
+    }
+
     private suspend fun pollLoop() {
         while (scope.isActive) {
             if (!RelayPrefs.isEnabled(this) || !RelayPrefs.isConfigured(this)) {

@@ -111,6 +111,37 @@
             android:text="Save"
             android:layout_marginTop="24dp" />
 
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Battery optimization"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:layout_marginTop="24dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Most phones (especially Xiaomi/MIUI, Oppo, Vivo, Huawei) will silently kill this relay in the background unless it's exempted from battery optimization. If messages stop going out after a while, check this first."
+            android:textSize="13sp"
+            android:textColor="#666666"
+            android:layout_marginTop="4dp" />
+
+        <Button
+            android:id="@+id/btnBatteryOptimization"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Allow relay to run in background"
+            android:layout_marginTop="8dp" />
+
+        <TextView
+            android:id="@+id/textBatteryStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="13sp"
+            android:layout_marginTop="4dp"
+            android:text="" />
+
         <Button
             android:id="@+id/btnForgetDevice"
             android:layout_width="match_parent"

@@ -1,9 +1,13 @@
 package com.akhoonzadaholdings.school.relay
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
+import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -53,8 +57,11 @@ class RelaySettingsActivity : AppCompatActivity() {
         binding.editLabel.setText(RelayPrefs.getLabel(this))
         binding.switchEnabled.isChecked = RelayPrefs.isEnabled(this)
         updateStatusText()
+        updateBatteryStatusText()
 
         binding.btnTestConnection.setOnClickListener { testConnection() }
+
+        binding.btnBatteryOptimization.setOnClickListener { requestIgnoreBatteryOptimizations() }
 
         binding.btnSave.setOnClickListener {
             if (binding.editToken.text.toString().isBlank()) {
@@ -81,6 +88,48 @@ class RelaySettingsActivity : AppCompatActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Refresh after returning from the system battery-optimization dialog, which is a
+        // separate screen this activity doesn't get a normal result callback from.
+        updateBatteryStatusText()
+    }
+
+    private fun isIgnoringBatteryOptimizations(): Boolean {
+        val pm = getSystemService(POWER_SERVICE) as PowerManager
+        return pm.isIgnoringBatteryOptimizations(packageName)
+    }
+
+    private fun requestIgnoreBatteryOptimizations() {
+        if (isIgnoringBatteryOptimizations()) {
+            Toast.makeText(this, "Already exempted — this device can run in the background", Toast.LENGTH_SHORT).show()
+            return
+        }
+        try {
+            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                data = Uri.parse("package:$packageName")
+            }
+            startActivity(intent)
+        } catch (e: Exception) {
+            // Some OEMs (MIUI in particular) block this dialog outright — fall back to the
+            // general battery-settings screen so the user can find the equivalent toggle
+            // manually (often under a separate "Autostart"/"No restrictions" entry there).
+            try {
+                startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+            } catch (_: Exception) {
+                Toast.makeText(this, "Couldn't open battery settings — check your phone's battery/autostart settings manually", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    private fun updateBatteryStatusText() {
+        binding.textBatteryStatus.text = if (isIgnoringBatteryOptimizations()) {
+            "✓ Exempted — this device can run in the background"
+        } else {
+            "✗ Not exempted yet — the relay may get killed after a while until this is granted"
+        }
+    }
+
     private fun ensureNotificationPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
@@ -93,7 +142,7 @@ class RelaySettingsActivity : AppCompatActivity() {
 
     private fun ensureSmsPermissionThenSave() {
         val hasSms = ContextCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS) ==
-            PackageManager.PERMISSION_GRANTED
+                PackageManager.PERMISSION_GRANTED
         if (hasSms) {
             saveAndMaybeStart()
         } else {

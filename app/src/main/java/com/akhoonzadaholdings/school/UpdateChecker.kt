@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.core.content.FileProvider
@@ -75,13 +76,41 @@ object UpdateChecker {
             .setTitle("Update Available")
             .setMessage("Version $versionName is available.\n\n$notes")
             .setPositiveButton("Download") { _, _ ->
-                startDownload(context, apkUrl, onFinished)
+                ensureInstallPermission(context, apkUrl, onFinished)
             }
             .setNegativeButton("Later") { _, _ ->
                 onFinished(true)
             }
             .setCancelable(false)
             .show()
+    }
+
+    // On Android 8+, installing an APK the app itself downloaded requires the
+    // "install unknown apps" permission for this app specifically. Without it, the
+    // install silently never completes — no crash, no clear error, just the system
+    // quietly refusing — which is what made this look like "downloads, then just
+    // reopens the app" and took 2-3 tries: each retry, the user happened to already
+    // be on the permission's settings screen from the previous attempt and granted
+    // it there, so only the retry after that actually installed. Checking up front
+    // and sending the user to grant it before ever downloading avoids that loop.
+    private fun ensureInstallPermission(context: Context, apkUrl: String, onFinished: (Boolean) -> Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !context.packageManager.canRequestPackageInstalls()) {
+            AlertDialog.Builder(context)
+                .setTitle("Permission needed")
+                .setMessage("To install updates, allow this app to install unknown apps on the next screen, then come back and tap Download again.")
+                .setPositiveButton("Open settings") { _, _ ->
+                    val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
+                        data = Uri.parse("package:${context.packageName}")
+                    }
+                    context.startActivity(intent)
+                    onFinished(true)
+                }
+                .setNegativeButton("Cancel") { _, _ -> onFinished(true) }
+                .setCancelable(false)
+                .show()
+            return
+        }
+        startDownload(context, apkUrl, onFinished)
     }
 
     private fun startDownload(context: Context, apkUrl: String, onFinished: (Boolean) -> Unit) {
@@ -172,7 +201,18 @@ object UpdateChecker {
 
                 Handler(Looper.getMainLooper()).post {
                     progressDialog.dismiss()
-                    installApk(context, outputFile)
+                    try {
+                        installApk(context, outputFile)
+                    } catch (e: Exception) {
+                        android.util.Log.e("UpdateChecker", "Install intent failed: ${e.message}", e)
+                        android.widget.Toast.makeText(
+                            context,
+                            "Couldn't start the installer: ${e.message}",
+                            android.widget.Toast.LENGTH_LONG
+                        ).show()
+                        onFinished(true)
+                        return@post
+                    }
                     // Do NOT call onFinished() here. installApk() only *launches*
                     // the system install prompt — it doesn't wait for the user to
                     // tap "Install". Calling onFinished(true) right after used to
