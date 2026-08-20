@@ -1,6 +1,6 @@
 {
-  "versionCode": 19,
-  "versionName": "1.0.9",
-  "apkUrl": "https://github.com/mubashirnoori/akpsc-app/releases/download/v1.0.9/app-release.apk",
-  "notes": "Sms Gateway Fixed for All Staff"
+  "versionCode": 20,
+  "versionName": "1.1.0",
+  "apkUrl": "https://github.com/mubashirnoori/akpsc-app/releases/download/v1.1.0/app-release.apk",
+  "notes": "Sms Gateway and layout Fixed for All Staff"
 }
