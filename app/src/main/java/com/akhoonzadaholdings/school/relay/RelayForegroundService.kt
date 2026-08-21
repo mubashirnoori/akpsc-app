@@ -79,6 +79,11 @@ class RelayForegroundService : Service() {
             startForeground(NOTIFICATION_ID, notification)
         }
 
+        // Defensive re-arm: covers the alarm being dropped by a reboot the boot
+        // receiver missed, an OS alarm-store reset, etc. Cheap and idempotent —
+        // same PendingIntent request code just gets its trigger time refreshed.
+        RelayWatchdog.schedule(this)
+
         if (pollJob?.isActive != true) {
             pollJob = scope.launch { pollLoop() }
         }

@@ -78,6 +78,7 @@ class RelaySettingsActivity : AppCompatActivity() {
 
         binding.btnForgetDevice.setOnClickListener {
             RelayForegroundService.stop(this)
+            RelayWatchdog.cancel(this)
             RelayPrefs.clear(this)
             binding.editEndpoint.setText(RelayPrefs.getEndpoint(this))
             binding.editToken.setText("")
@@ -160,9 +161,11 @@ class RelaySettingsActivity : AppCompatActivity() {
 
         if (enabled) {
             RelayForegroundService.start(this)
+            RelayWatchdog.schedule(this)
             Toast.makeText(this, "Relay enabled on this device", Toast.LENGTH_SHORT).show()
         } else {
             RelayForegroundService.stop(this)
+            RelayWatchdog.cancel(this)
             Toast.makeText(this, "Relay disabled", Toast.LENGTH_SHORT).show()
         }
         updateStatusText()

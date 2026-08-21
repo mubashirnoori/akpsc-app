@@ -9,6 +9,7 @@ class RelayBootReceiver : BroadcastReceiver() {
         if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
         if (RelayPrefs.isConfigured(context) && RelayPrefs.isEnabled(context)) {
             RelayForegroundService.start(context)
+            RelayWatchdog.schedule(context)
         }
     }
 }
