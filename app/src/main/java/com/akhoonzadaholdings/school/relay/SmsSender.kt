@@ -12,13 +12,16 @@ import kotlin.coroutines.resume
 
 /** Outcome of trying to send one message. */
 sealed class SendResult {
-    object Sent : SendResult()
+    /** [wasModified] reflects whether MessageSanitizer changed anything before sending,
+     *  so the caller can log/surface it (e.g. "Sent to •••1234 (cleaned for SMS encoding)")
+     *  instead of that happening invisibly. */
+    data class Sent(val wasModified: Boolean = false) : SendResult()
     data class Failed(val reason: String) : SendResult()
     /** SmsManager accepted the send with no exception, but the OS never reported back
      *  whether it actually went out (seen on some OEM battery managers). Treated as a
      *  probable success rather than retried, since retrying risks sending the same SMS
      *  twice if it did in fact go out the first time. */
-    data class Unconfirmed(val reason: String) : SendResult()
+    data class Unconfirmed(val reason: String, val wasModified: Boolean = false) : SendResult()
 }
 
 /**
@@ -31,11 +34,20 @@ object SmsSender {
     private const val ACTION_SENT = "com.akhoonzadaholdings.school.relay.SMS_SENT"
     private var requestSeq = 0
 
-    suspend fun send(context: Context, to: String, message: String): SendResult =
+    suspend fun send(context: Context, to: String, rawMessage: String): SendResult =
         suspendCancellableCoroutine { cont ->
             val appContext = context.applicationContext
             val requestId = requestSeq++
             val action = "$ACTION_SENT.$requestId"
+
+            // Run every outgoing message through the sanitizer first: strips/replaces
+            // characters that would otherwise force UCS-2 encoding (70/67 chars per
+            // part instead of GSM-7's 160/153), and truncates as a last resort so a
+            // message never goes out as more than MessageSanitizer's part cap — see
+            // that file for why this, not the sending code below, is what actually
+            // controls how many "chunks" a message becomes.
+            val sanitized = MessageSanitizer.sanitize(rawMessage)
+            val message = sanitized.text
 
             var resumed = false
 
@@ -48,7 +60,8 @@ object SmsSender {
                     } catch (_: Exception) {
                     }
                     val result: SendResult = when (resultCode) {
-                        android.app.Activity.RESULT_OK -> SendResult.Sent
+                        android.app.Activity.RESULT_OK ->
+                            SendResult.Sent(wasModified = sanitized.wasModified)
                         SmsManager.RESULT_ERROR_NO_SERVICE -> SendResult.Failed("No cell service")
                         SmsManager.RESULT_ERROR_RADIO_OFF -> SendResult.Failed("Airplane mode / radio off")
                         SmsManager.RESULT_ERROR_NULL_PDU -> SendResult.Failed("Null PDU")

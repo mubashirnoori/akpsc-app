@@ -134,7 +134,7 @@ class RelayForegroundService : Service() {
                     when (result) {
                         is SendResult.Sent -> {
                             sentCount++
-                            lastStatus = "Sent to ${maskNumber(msg.to)}"
+                            lastStatus = "Sent to ${maskNumber(msg.to)}" + sanitizeNote(result.wasModified)
                             runCatching { GatewayApi.ack(endpoint, token, msg.id, sent = true) }
                         }
                         is SendResult.Unconfirmed -> {
@@ -143,7 +143,7 @@ class RelayForegroundService : Service() {
                             // only thing missing is Android's confirmation of that. Retrying
                             // here would risk texting the same person the same message twice.
                             sentCount++
-                            lastStatus = "Sent to ${maskNumber(msg.to)} (unconfirmed — check phone if unsure)"
+                            lastStatus = "Sent to ${maskNumber(msg.to)} (unconfirmed — check phone if unsure)" + sanitizeNote(result.wasModified)
                             runCatching { GatewayApi.ack(endpoint, token, msg.id, sent = true) }
                         }
                         is SendResult.Failed -> {
@@ -168,6 +168,12 @@ class RelayForegroundService : Service() {
 
     private fun maskNumber(number: String): String =
         if (number.length > 4) "•••" + number.takeLast(4) else number
+
+    // Surfaced in the notification only — the server-side sms_outbox row is still
+    // acked as a plain "sent", so this is purely visibility for whoever's watching
+    // this phone, not something the admin panel needs to parse.
+    private fun sanitizeNote(wasModified: Boolean): String =
+        if (wasModified) " (cleaned for SMS encoding)" else ""
 
     private fun createChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
