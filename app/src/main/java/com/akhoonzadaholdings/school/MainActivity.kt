@@ -199,6 +199,43 @@ class MainActivity : ComponentActivity() {
         }
 
         webView.webViewClient = object : WebViewClient() {
+            // Without this override, the WebView only knows how to load
+            // http(s) URLs. A wa.me click-to-chat link redirects through
+            // WhatsApp's own page, which then tries to hand off to
+            // `whatsapp://send?...` — a scheme the WebView has no idea what
+            // to do with, so it fails outright with
+            // net::ERR_UNKNOWN_URL_SCHEME instead of opening the app. Same
+            // story for tel:, mailto:, intent://, market://, etc. This is
+            // the actual fix for that: for any non-http(s) scheme, ask the
+            // OS to launch whatever app claims it (WhatsApp, Phone, Play
+            // Store...) instead of letting the WebView try to load it as a
+            // page.
+            override fun shouldOverrideUrlLoading(
+                view: WebView?,
+                request: android.webkit.WebResourceRequest?
+            ): Boolean {
+                val uri = request?.url ?: return false
+                val scheme = uri.scheme?.lowercase()
+                if (scheme == "http" || scheme == "https") {
+                    return false // let the WebView load it normally
+                }
+                return try {
+                    startActivity(Intent(Intent.ACTION_VIEW, uri))
+                    true
+                } catch (e: android.content.ActivityNotFoundException) {
+                    // No app installed that handles this scheme (e.g.
+                    // WhatsApp not installed) — nothing sensible to fall
+                    // back to inside the WebView, so just swallow it
+                    // instead of showing the WebView's raw error page.
+                    android.widget.Toast.makeText(
+                        this@MainActivity,
+                        "No app found to open this link.",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                    true
+                }
+            }
+
             override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
                 super.onPageStarted(view, url, favicon)
                 progressBar.visibility = View.VISIBLE
