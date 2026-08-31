@@ -1,6 +1,6 @@
 {
-  "versionCode": 23,
-  "versionName": "1.1.3",
-  "apkUrl": "https://github.com/mubashirnoori/akpsc-app/releases/download/v1.1.3/app-release.apk",
-  "notes": "Fixed Chunk Messages with Emoji"
+  "versionCode": 24,
+  "versionName": "1.1.4",
+  "apkUrl": "https://github.com/mubashirnoori/akpsc-app/releases/download/v1.1.4/app-release.apk",
+  "notes": "Fixed WhatsApp Messages"
 }
